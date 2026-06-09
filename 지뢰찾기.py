@@ -58,7 +58,7 @@ def check_win():
     return True
 
 # 6. UI 화면 그리기
-st.title("💣 스트림릿 지뢰찾기")
+st.title("💣 김동현의 스트림릿 지뢰찾기")
 
 # 개발자 모드 토글
 show_mines = st.toggle("🔍 지뢰 위치 미리보기 (개발자 모드)")
