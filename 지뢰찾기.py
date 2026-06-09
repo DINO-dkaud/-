@@ -1,0 +1,115 @@
+import random
+import streamlit as st
+
+# 1. 게임 환경 설정
+ROW = 9
+COL = 9
+MINES = 10
+
+# 2. 게임 보드 초기화 함수
+def init_game():
+    board = [[0] * COL for _ in range(ROW)]
+    mine_positions = random.sample(range(ROW * COL), MINES)
+    for pos in mine_positions:
+        r, c = pos // COL, pos % COL
+        board[r][c] = -1
+
+    for r in range(ROW):
+        for c in range(COL):
+            if board[r][c] == -1: continue
+            count = 0
+            for dr in [-1, 0, 1]:
+                for dc in [-1, 0, 1]:
+                    nr, nc = r + dr, c + dc
+                    if 0 <= nr < ROW and 0 <= nc < COL and board[nr][nc] == -1:
+                        count += 1
+            board[r][c] = count
+
+    st.session_state.board = board
+    st.session_state.revealed = [[False] * COL for _ in range(ROW)]
+    st.session_state.flags = [[False] * COL for _ in range(ROW)] # 🚩 깃발 위치 저장용 추가
+    st.session_state.game_over = False
+    st.session_state.won = False
+
+if "board" not in st.session_state:
+    init_game()
+
+# 4. 빈 셀 오픈 함수
+def reveal_cell(r, c):
+    if not (0 <= r < ROW and 0 <= c < COL) or st.session_state.revealed[r][c] or st.session_state.flags[r][c]:
+        return # 🚩 깃발이 꼽힌 곳은 열리지 않도록 보호
+    st.session_state.revealed[r][c] = True
+
+    if st.session_state.board[r][c] == -1:
+        st.session_state.game_over = True
+        return
+
+    if st.session_state.board[r][c] == 0:
+        for dr in [-1, 0, 1]:
+            for dc in [-1, 0, 1]:
+                reveal_cell(r + dr, c + dc)
+
+# 5. 승리 조건 체크
+def check_win():
+    for r in range(ROW):
+        for c in range(COL):
+            if st.session_state.board[r][c] != -1 and not st.session_state.revealed[r][c]:
+                return False
+    return True
+
+# 6. UI 화면 그리기
+st.title("💣 스트림릿 지뢰찾기")
+
+# 개발자 모드 토글
+show_mines = st.toggle("🔍 지뢰 위치 미리보기 (개발자 모드)")
+
+# 🖱️ [핵심 추가] 마우스 클릭 모드 선택 라디오 버튼
+click_mode = st.radio("🖱️ 마우스 클릭 행동 선택:", ["칸 열기 ⬜", "지뢰 표시 🚩"], horizontal=True)
+
+if st.session_state.game_over:
+    st.error("💥 지뢰를 밟았습니다! 게임 오버!")
+elif st.session_state.won:
+    st.success("🎉 축하합니다! 모든 지뢰를 찾았습니다!")
+
+if st.button("게임 재시작"):
+    init_game()
+    st.rerun()
+
+st.write("---")
+
+# 7. 9x9 격자 생성 및 버튼 배치
+for r in range(ROW):
+    cols = st.columns(COL)
+    for c in range(COL):
+        with cols[c]:
+            # 셀이 이미 열렸는지 확인
+            if st.session_state.revealed[r][c]:
+                val = st.session_state.board[r][c]
+                if val == -1: st.button("💥", key=f"btn_{r}_{c}", disabled=True)
+                elif val == 0: st.button(" ", key=f"btn_{r}_{c}", disabled=True)
+                else: st.button(str(val), key=f"btn_{r}_{c}", disabled=True)
+            
+            # 아직 안 열린 칸 처리
+            else:
+                # 라벨 결정 (기본값 / 개발자모드 힌트 / 깃발 표시)
+                if st.session_state.flags[r][c]:
+                    button_label = "🚩"  # 깃발이 꼽힌 칸
+                elif show_mines and st.session_state.board[r][c] == -1:
+                    button_label = "🚨"  # 개발자 모드 힌트
+                else:
+                    button_label = "⬜"  # 일반 닫힌 칸
+
+                if st.button(button_label, key=f"btn_{r}_{c}", disabled=st.session_state.game_over or st.session_state.won):
+                    # [모드 1] 칸 열기 일 때
+                    if click_mode == "칸 열기 ⬜":
+                        if not st.session_state.flags[r][c]: # 깃발이 없을 때만 열기 가능
+                            reveal_cell(r, c)
+                            if not st.session_state.game_over and check_win():
+                                st.session_state.won = True
+                            st.rerun()
+                    
+                    # [모드 2] 지뢰 표시(깃발 꼽기) 일 때
+                    elif click_mode == "지뢰 표시 🚩":
+                        # 깃발이 이미 있으면 해제, 없으면 꼽기 토글(Toggle)
+                        st.session_state.flags[r][c] = not st.session_state.flags[r][c]
+                        st.rerun()
